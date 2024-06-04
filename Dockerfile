@@ -6,10 +6,10 @@
 FROM python:3.10.11-slim-buster
 
 # Récupération fichiers
-COPY . /app2
+COPY . /MERAH_Mohamed_1_APP_Streamlit_062024
 
 # Répertoire de travail
-WORKDIR /app2
+WORKDIR /MERAH_Mohamed_1_APP_Streamlit_062024
 
 # Dépendance pour LightGBM
 RUN apt-get update
@@ -28,7 +28,7 @@ HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 
 RUN cp config.toml ~/config.toml
 RUN cp credentials.toml ~/credentials.toml
-WORKDIR /app2
+WORKDIR /MERAH_Mohamed_1_APP_Streamlit_062024
 
 # Lance streamlit
-CMD ["streamlit", "run","app2.py"]
+CMD ["streamlit", "run","MERAH_Mohamed_1_APP_Streamlit_062024.py"]
