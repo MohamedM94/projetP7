@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import seaborn as sns
 import sys
@@ -8,21 +9,28 @@ import plotly.express as px
 import pickle
 import shap
 from lightgbm import LGBMClassifier
+from matplotlib.image import imread
+
 # Change the console encoding
 sys.stdout.reconfigure(encoding='utf-8')
 
+# define constants
+Accepter_COLOR = "#31b002"
+Rejeter_COLOR = "#c43145"
+THRESHOLD = 0.51
+logo = imread("logo_pret_a_depenser.png")
 
 def main() :
 
+     # data_train, data_test, shap_values, exp_value, logo = load_data()
+    st.sidebar.image(logo)
     
     @st.cache_data
     def load_data():
-        data = pd.read_csv("application_train_sample.csv", index_col='SK_ID_CURR', encoding ='utf-8', sep ='\t')
-        sample = pd.read_csv("application_train_sample.csv", encoding ='utf-8', sep ='\t')
-        X_test = pd.read_csv("X_test_sample.csv", sep ='\t')
-        #X_test.drop('SK_ID_CURR', axis=1, inplace=True)
-        X_test.drop('Unnamed: 0', axis=1, inplace=True)
-        X_test.drop('Unnamed: 0.1', axis=1, inplace=True)        
+        
+        data = pd.read_csv("df_train_cleaned.csv", index_col='SK_ID_CURR')
+        sample = pd.read_csv("df_train_cleaned.csv")
+        X_test = pd.read_csv("df_test_cleaned.csv")       
         target = data.iloc[:, -1:]
 
         return sample, target,data,X_test
@@ -58,10 +66,13 @@ def main() :
 
     @st.cache_data
     def load_age_population(data):
-        data_age = round(-(data["DAYS_BIRTH"]/365), 2)
+        data_age = round(-(data["DAYS_BIRTH"]), 2)
         return data_age
     
-   
+    def get_color(result):
+    
+        return Accepter_COLOR if result == "Crédit accepté" else Rejeter_COLOR
+ 
    
     @st.cache_data
     def load_income_population(sample):
@@ -80,15 +91,13 @@ def main() :
         y_pred_lgbm_proba_df=y_pred_lgbm_proba_df[y_pred_lgbm_proba_df['SK_ID_CURR']==int(chk_id)]
         prediction=y_pred_lgbm_proba_df.iat[0,1]
         
-        if y_pred_lgbm_proba_df.iat[0,1]*100>10 : 
+        if y_pred_lgbm_proba_df.iat[0,1]*100>51 : 
             statut="Client risqué" 
         else :
             statut="Client non risqué"
         return prediction,statut
 
-    
-    
-    
+
     #Loading data……
     sample, target,data,X_test = load_data()
     id_client = sample[['SK_ID_CURR']].values
@@ -101,7 +110,7 @@ def main() :
                 #Title display
     html_temp = """
     <div style="background-color: #D54773; padding:10px; border-radius:10px">
-    <h1 style="color: white; text-align:center">Dashboard Scoring Credit</h1>
+    <h1 style="color: white; text-align:center">App Scoring Credit</h1>
     </div>
 
     """
@@ -137,11 +146,19 @@ def main() :
     #Customer information display : Customer Gender, Age, Family status, Children, …
     st.header(" INFORMATION CLIENT SELECTIONNE ")
 
+
+     # Convert "CODE_GENDER" to string for filtering
+    data["CODE_GENDER"] = data["CODE_GENDER"].apply(lambda x: "Male" if x == 0 else "Female")
+    # Convert "YEARS_BIRTH" to string for filtering
+    data["YEARS_BIRTH"] = (round(abs(data["DAYS_BIRTH"]), 0).astype(int)).astype(str)
+    
+    
+
     if st.checkbox("AFFICHER LES INFORMATIONS SUR LE CLIENT ?",key="option1"):
         infos_client = identite_client(data, chk_id)
         st.write(" SEXE: ", infos_client["CODE_GENDER"].values[0])
-        st.write(" AGE : {:.0f} ans".format(int(infos_client["DAYS_BIRTH"]/-365)))
-        st.write("SITUATION DE FAMILLE : ", infos_client["NAME_FAMILY_STATUS"].values[0])
+        st.write(" AGE : {:.0f} ans".format(int(infos_client["YEARS_BIRTH"])))
+        #st.write("SITUATION DE FAMILLE : ", infos_client["NAME_FAMILY_STATUS"].values[0])
         st.write("NOMBRE D'ENFANT : {:.0f}".format(infos_client["CNT_CHILDREN"].values[0]))
 
         
@@ -149,7 +166,7 @@ def main() :
         data_age = load_age_population(data)
         fig, ax = plt.subplots(figsize=(10, 5))
         sns.histplot(data_age, edgecolor = 'k', color="#D54773",bins=20)
-        ax.axvline(int(-infos_client["DAYS_BIRTH"].values /365), color="black", linestyle='--')
+        ax.axvline(int(infos_client["DAYS_BIRTH"].values), color="black", linestyle='--')
         ax.set(title='AGE CLIENT', xlabel='AGE', ylabel='')
         st.pyplot(fig)
 
@@ -177,24 +194,6 @@ def main() :
     prediction,statut = load_prediction(sample,X_test, chk_id, clf)
     st.write(" PROBABLITE DE DEFAUT : {:.0f} %".format(round(float(prediction)*100, 2)))
     st.write("STATUT DU CLIENT : ",statut)
-    
-    
-#Feature importance / description
-    if st.checkbox("AFFICHER LES RESULTATS SUR LE CLIENT ?",key="Option2"):
-        nbligne=sample.loc[sample['SK_ID_CURR'] == int(chk_id)].index.item()
-        fig, ax = plt.subplots(figsize=(10, 10))
-        explainer = shap.Explainer(clf)
-        shap_values = explainer.shap_values(X_test)
-        shap_vals = explainer(X_test)
-        shap.waterfall_plot(shap_vals[nbligne][:, 0],show = False)
-        st.pyplot(fig)
-        
-    else:
-        st.markdown("<i>…</i>", unsafe_allow_html=True)    
-    
-    
-    
-    
     
     
 if __name__ == '__main__':
